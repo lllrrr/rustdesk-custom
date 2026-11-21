@@ -409,17 +409,34 @@ if (-not $EnableCheckUpdate) {
         "    }"
     )
 
-    Replace-Once -Path (Join-Path $workRoot "src\updater.rs") -OldLines @(
-        "fn check_update(manually: bool) -> ResultType<()> {",
-        "    #[cfg(target_os = `"windows`")]"
-    ) -NewLines @(
-        "#[allow(unreachable_code, unused_variables)]",
-        "fn check_update(manually: bool) -> ResultType<()> {",
-        "    // Custom build: update check and auto-update are disabled.",
-        "    return Ok(());",
-        "    #[cfg(target_os = `"windows`")]"
-    )
-}
+# 根据 $Version 参数动态适配 1.4.9 与 1.5.0+ 的 updater.rs 结构差异
+    if ([version]$Version -ge [version]"1.5.0") {
+        # === 1.5.0+：函数体内新增了 macOS 相关的注释和逻辑 ===
+        Replace-Once -Path (Join-Path $workRoot "src\updater.rs") -OldLines @(
+            "fn check_update(manually: bool) -> ResultType<()> {",
+            "    // On macOS, auto-update is handled by check_update_as_root() in the service process.",
+            "    // The shared check_update() path is only used for manual update checks from the GUI."
+        ) -NewLines @(
+            "#[allow(unreachable_code, unused_variables)]",
+            "fn check_update(manually: bool) -> ResultType<()> {",
+            "    // Custom build: update check and auto-update are disabled.",
+            "    return Ok(());",
+            "    // On macOS, auto-update is handled by check_update_as_root() in the service process.",
+            "    // The shared check_update() path is only used for manual update checks from the GUI."
+        )
+    } else {
+        # === 1.4.9 及更早版本：函数体直接以 #[cfg(target_os = "windows")] 开头 ===
+        Replace-Once -Path (Join-Path $workRoot "src\updater.rs") -OldLines @(
+            "fn check_update(manually: bool) -> ResultType<()> {",
+            "    #[cfg(target_os = `"windows`")]"
+        ) -NewLines @(
+            "#[allow(unreachable_code, unused_variables)]",
+            "fn check_update(manually: bool) -> ResultType<()> {",
+            "    // Custom build: update check and auto-update are disabled.",
+            "    return Ok(());",
+            "    #[cfg(target_os = `"windows`")]"
+        )
+    }
 
 # ---------- 5. 子模块指向私仓 ----------
 Write-Host "`n[5/9] 更新 .gitmodules" -ForegroundColor Cyan
